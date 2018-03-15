@@ -1,0 +1,236 @@
+---
+title: "Optional Quizz"
+author: "Federico Gonzalez"
+date: "12/03/2018"
+output: html_document
+---
+
+## Optional Quizz
+
+Your assignment is to study how income varies across different categories of college majors. You will be using data from a study of recent college graduates. Make sure to use good practices that you have learned so far in this course and previous courses in the specialization. In particular, it is good practice to specify an analysis plan early in the process to avoid the “p-hacking” behavior of trying many analyses to find one that has desired results. If you want to learn more about “p-hacking”, you can visit https://projects.fivethirtyeight.com/p-hacking/.
+
+Your assignment is to study how income varies across college major categories. Specifically answer: “Is there an association between college major category and income?”
+
+To get started, start a new R/RStudio session with a clean workspace. To do this in R, you can use the q() function to quit, then reopen R. The easiest way to do this in RStudio is to quit RStudio entirely and reopen it. After you have started a new session, run the following commands. This will load a data.frame called college for you to work with.
+
+```{r, eval=FALSE}
+install.packages("devtools")
+devtools::install_github("jhudsl/collegeIncome")
+```
+
+```{r}
+library(collegeIncome)
+data(college)
+```
+Next download and install the matahari R package with the following commands:
+
+```{r, eval=FALSE}
+devtools::install_github("jhudsl/matahari")
+```
+
+```{r}
+library(matahari)
+```
+
+This package allows a record of your analysis (your R command history) to be documented. You will be uploading a file containing this record to GitHub and submitting the link as part of this quiz.
+
+Before you start the analysis for this assignment, enter the following command to begin the documentation of your analysis:
+
+```{r, eval=FALSE}
+dance_start(value = FALSE, contents = FALSE)
+```
+
+You can then proceed with the rest of your analysis in R as usual. When you have finished your analysis, use the following command to save the record of your analysis on your desktop:
+
+```{r, eval=FALSE}
+dance_save("~/Desktop/college_major_analysis.rds")
+```
+
+Please upload this college_major_analysis.rds file to a public GitHub repository. In question 4 of this quiz, you will share the link to this file.
+
+A codebook for the dataset is given below:
+
+* rank: Rank by median earnings
+* major_code: Major code
+* major: Major description
+* major_category: Category of major
+* total: Total number of people with major
+* sample_size: Sample size of full-time, year-round individuals used for income/earnings estimates: p25th, median, p75th
+* p25th: 25th percentile of earnings
+* median: Median earnings of full-time, year-round workers
+* p75th: 75th percentile of earnings
+* perc_men: % men with major (out of total)
+* perc_women: % women with major (out of total)
+* perc_employed: % employed (out of total)
+* perc_employed_fulltime: % employed 35 hours or more (out of employed)
+* perc_employed_parttime: % employed less than 35 hours (out of employed)
+* perc_employed_fulltime_yearround: % employed at least 50 weeks and at least 35 hours (out of employed and full-time)
+* perc_unemployed: % unemployed (out of employed)
+* perc_college_jobs: % with job requiring a college degree (out of employed)
+* perc_non_college_jobs: % with job not requiring a college degree (out of employed)
+* perc_low_wage_jobs: % in low-wage service jobs (out of total)
+
+###Hypothesis
+Question: Based on your analysis, would you conclude that there is a significant association between college major category and income?
+
+#### Loading dependencies
+```{r, results='hide'}
+library(dplyr)
+
+```
+
+####Exploratory Analysis
+```{r}
+dim(college)
+head(college,3)
+str(college)
+mean(college$perc_employed+college$perc_unemployed)
+mean(college$perc_men + college$perc_women)
+sum(is.na(college))
+unique(college$major_category)
+```
+
+##### Quick summary of major category dispertion
+```{r}
+with(college,aggregate(median,list(major_category), function(x) {c(Length= round(length(x),1) , Mean= round(mean(x),1), Var= round(var(x),1) )} )) 
+
+```
+
+As major "Interdiciplinary"" has only one data row and no model can be constructed fromo it, it will be removed.  
+
+```{r}
+college <- college %>% filter(major_category != "Interdisciplinary")
+```
+
+Additionally, Range of the percentages values will be verified to be between 0 and 1.
+```{r}
+apply(college,2,range)
+college[college$perc_employed_fulltime>1,]
+```
+
+There are percentages above 100%, NA's and Inf values in the data which will be removed as we assume they are data entry errors.
+
+```{r}
+
+college <- college %>% filter(perc_employed_fulltime <= 1 | perc_employed_fulltime != "Inf")
+```
+
+#### Exploratory Data Plots
+```{r, cache=TRUE}
+college$major_category <- as.factor(college$major_category)
+# Total number of people with major
+par(mar=c(8,4,2,2), cex.axis=0.5 )
+plot(as.factor(college$major_category),college$total, las=2)
+
+# See the median in earnings for each category
+plot(as.factor(college$major_category), college$median, las=2)
+```
+
+
+```{r, , cache=TRUE}
+# See the % of people unemployed per category
+par(mar=c(8,4,2,2), cex.axis=0.5 )
+plot(as.factor(college$major_category),college$perc_unemployed, las=2)
+
+# Percentage of people with low wage jobs out of total
+par(mar=c(8,4,2,2), cex.axis=0.5 )
+plot(as.factor(college$major_category),college$perc_low_wage_jobs, las=2)
+
+```
+
+#### Recalculating percentages from dataset
+The percentages columns will be transformed to No. of people in order to make the analysis.
+```{r}
+college$No.Women <- college$total*college$perc_women
+college$No.Men <- college$total*college$perc_men
+college$No.Employed <- college$total*college$perc_employed
+college$No.Unemployed <- college$total*college$perc_unemployed
+college$No.Employed_Fulltime <- college$No.Employed*college$perc_employed_fulltime
+college$No.Employed_Parttime <- college$No.Employed*college$perc_employed_parttime
+college$No.Employed_fulltime_yearround <- college$No.Employed_Fulltime*college$perc_employed_fulltime_yearround
+college$No.College_jobs <- college$No.Employed*college$perc_college_jobs
+college$No.Non_college_jobs <- college$No.Employed*college$perc_non_college_jobs
+college$No.Low_wage_jobs <- college$total*college$perc_low_wage_jobs
+
+college2 <- college[,c(4,5,9,20:29)]
+college2[rowSums(is.na(college2)) > 0,]
+
+```
+
+The rows on the table above contains "NaN's", which should be analyzed for the case they were data entry error. for this analysis, those two rows will be removed.
+
+```{r}
+college2 <- college2[complete.cases(college2),]
+
+```
+
+##### Taking a look to a density plot to see the disopersion of data
+```{r, , cache=TRUE}
+plot(density(college2$median), xlab = "Median Income", ylab = "Density", main = "Density Plot median Income")
+abline(v=mean(college2$median), col="blue")
+abline(v=median(college2$median), col="magenta")
+legend("topright", legend = c("Mean", "Median"), col = c("Blue","Magenta"), lty=1, cex=0.8)
+
+```
+
+The distribution doesn't follow a normal distribution
+
+####Adjustment 
+```{r}
+fit <- lm(median ~ major_category - 1 , data=college2)
+summary(fit)
+
+```
+
+
+```{r, fig.width=9, fig.height=9, cache=TRUE}
+par(mfrow = c(2, 2))
+plot(fit)
+
+```
+
+As per the Residuals plots. Rows 62,80 and 16 might be a potential problem as they have high leverage on the model. We could further investigate if those were a data entry error.  
+
+#####Influence measures
+
+```{r}
+InfluenceM <- influence.measures(fit)
+summary(InfluenceM)
+```
+
+Form this summary, there are 11 rows that have high influence on the model that should be reviewed/removed.
+
+
+#####Adjusting a new model removing outliers
+```{r, fig.width=9, fig.height=9}
+influencial.rows <- which(apply(InfluenceM$is.inf,1,any))
+
+college2[influencial.rows,]
+
+```
+
+As we can see all data from "Law & Public Policy" and 4 out of 5 "Communications & Journalism" entries were removed due to a high leverage leaving those major_categories incomplete for making a model. 
+
+```{r, fig.width=9, fig.height=9, cache=TRUE}
+college3 <- college2[-influencial.rows,]
+fit2 <- lm(median ~ major_category - 1 , data=college3)
+summary(fit2)
+
+par(mfrow = c(2, 2))
+plot(fit2)
+```
+
+This error confirms the previous statemente that the model can not be created for mayor categories with only one observation.
+
+A different approach would be needed. 
+
+
+##### Conclusion
+There is no significant association between college major category and income with a simple linear model.
+
+A different approach would be clustering Income data to compare vs Major Catgories for any given value of Income. This assumption is based on the pattern shown of the residuals dispertion plots that could make Income data comparable, in at least five ranges on Income.
+
+```{r, cache=TRUE}
+plot(fit)[1]
+
+```
